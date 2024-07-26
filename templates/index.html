@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 50px;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .form-title {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h1 class="form-title">YouTube Downloader</h1>
+            <form action="/download" method="post">
+                <div class="form-group">
+                    <label for="url">YouTube URL:</label>
+                    <input type="text" class="form-control" id="url" name="url" required>
+                </div>
+                <div class="form-group">
+                    <label for="format">Format:</label>
+                    <select class="form-control" id="format" name="format">
+                        <option value="mp4">MP4</option>
+                        <option value="mp3">MP3</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="resolution">MP4 Resolution:</label>
+                    <select class="form-control" id="resolution" name="resolution">
+                        <option value="best">Best</option>
+                        <option value="1080">1080p</option>
+                        <option value="720">720p</option>
+                        <option value="480">480p</option>
+                        <option value="360">360p</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quality">MP3 Quality:</label>
+                    <select class="form-control" id="quality" name="quality">
+                        <option value="192">192 kbps</option>
+                        <option value="128">128 kbps</option>
+                        <option value="64">64 kbps</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Download</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

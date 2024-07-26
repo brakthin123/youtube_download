@@ -1,0 +1,104 @@
+from flask import Flask, request, render_template, send_file
+import yt_dlp
+from io import BytesIO
+from mutagen.id3 import ID3, APIC
+from PIL import Image
+import os
+import tempfile
+import requests
+
+app = Flask(__name__)
+
+def convert_image_to_jpeg(image_data):
+    """
+    Convert image to JPEG format in memory.
+    """
+    with Image.open(image_data) as img:
+        with BytesIO() as output:
+            img.convert('RGB').save(output, format='JPEG')
+            return BytesIO(output.getvalue())
+
+def download_youtube_audio_with_cover(url, output_dir, quality):
+    """
+    Download audio from YouTube and optionally get the cover image.
+    """
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+        'noplaylist': True,
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': quality,
+        }],
+        'writethumbnail': True  # Attempt to download thumbnail if available
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(url, download=True)
+        thumbnail_url = info_dict.get('thumbnail', None)
+        title = info_dict['title']
+        mp3_file = os.path.join(output_dir, f"{title}.mp3")
+
+        if thumbnail_url:
+            response = requests.get(thumbnail_url)
+            cover_image_data = convert_image_to_jpeg(BytesIO(response.content))
+        else:
+            cover_image_data = None
+
+        return mp3_file, cover_image_data
+
+def add_cover_image(mp3_file, cover_image_data):
+    """
+    Add cover image to the MP3 file.
+    """
+    audio = ID3(mp3_file)
+    audio.add(APIC(
+        encoding=3,
+        mime='image/jpeg',
+        type=3,  # Cover (front)
+        desc='Cover',
+        data=cover_image_data.read()
+    ))
+    audio.save()
+
+@app.route('/')
+def index():
+    """
+    Render the index page with the form.
+    """
+    return render_template('index.html')
+
+@app.route('/download', methods=['POST'])
+def download():
+    """
+    Handle the form submission and download the requested file format.
+    """
+    url = request.form['url']
+    format = request.form['format']
+    resolution = request.form.get('resolution', 'best')
+    quality = request.form.get('quality', '192')
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        if format == 'mp3':
+            file_name, cover_image_data = download_youtube_audio_with_cover(url, temp_dir, quality)
+            if cover_image_data:
+                add_cover_image(file_name, cover_image_data)
+            return send_file(file_name, as_attachment=True)
+        else:
+            ydl_opts = {
+                'format': f'bestvideo[height<={resolution}]+bestaudio/best' if resolution != 'best' else 'bestvideo+bestaudio/best',
+                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+                'noplaylist': True,
+                'merge_output_format': 'mp4',  # Ensure output format is mp4
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info_dict = ydl.extract_info(url, download=True)
+                file_name = os.path.join(temp_dir, f"{info_dict['title']}.mp4")
+                # Check if the file actually exists with the expected extension
+                if not os.path.exists(file_name):
+                    file_name = os.path.join(temp_dir, f"{info_dict['title']}.webm")
+            return send_file(file_name, as_attachment=True)
+
+if __name__ == '__main__':
+    app.run(debug=True)
