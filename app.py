@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, send_file
+from flask import Flask, request, render_template, send_file, jsonify
 import yt_dlp
 from io import BytesIO
 from mutagen.id3 import ID3, APIC
@@ -6,8 +6,11 @@ from PIL import Image
 import os
 import tempfile
 import requests
+import time
 
 app = Flask(__name__)
+
+download_info = {'status': 'not started', 'speed': 0, 'elapsed': 0, 'progress': 0, 'time': 0}
 
 def convert_image_to_jpeg(image_data):
     """
@@ -74,16 +77,24 @@ def download():
     """
     Handle the form submission and download the requested file format.
     """
+    global download_info
+    download_info = {'status': 'not started', 'speed': 0, 'elapsed': 0, 'progress': 0, 'time': 0}
+    
     url = request.form['url']
     format = request.form['format']
     resolution = request.form.get('resolution', 'best')
     quality = request.form.get('quality', '192')
+    
+    start_time = time.time()
     
     with tempfile.TemporaryDirectory() as temp_dir:
         if format == 'mp3':
             file_name, cover_image_data = download_youtube_audio_with_cover(url, temp_dir, quality)
             if cover_image_data:
                 add_cover_image(file_name, cover_image_data)
+            end_time = time.time()
+            download_info['status'] = 'finished'
+            download_info['time'] = end_time - start_time
             return send_file(file_name, as_attachment=True)
         else:
             ydl_opts = {
@@ -91,14 +102,30 @@ def download():
                 'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
                 'noplaylist': True,
                 'merge_output_format': 'mp4',  # Ensure output format is mp4
+                'progress_hooks': [progress_hook],
             }
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info_dict = ydl.extract_info(url, download=True)
-                file_name = os.path.join(temp_dir, f"{info_dict['title']}.mp4")
-                # Check if the file actually exists with the expected extension
+                file_name = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.mp4'
+                # Ensure the file exists with the correct extension
                 if not os.path.exists(file_name):
-                    file_name = os.path.join(temp_dir, f"{info_dict['title']}.webm")
+                    file_name = ydl.prepare_filename(info_dict).rsplit('.', 1)[0] + '.webm'
+
+            end_time = time.time()
+            download_info['status'] = 'finished'
+            download_info['time'] = end_time - start_time
             return send_file(file_name, as_attachment=True)
 
+def progress_hook(d):
+    if d['status'] == 'downloading':
+        download_info['speed'] = d.get('speed', 0)
+        download_info['elapsed'] = d.get('elapsed', 0)
+        download_info['progress'] = d.get('_percent_str', '0.00%')
+
+@app.route('/progress', methods=['GET'])
+def progress():
+    return jsonify(download_info)
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='127.0.0.1', port=5000)
